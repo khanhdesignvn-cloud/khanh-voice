@@ -10,11 +10,24 @@ Tài liệu lưu trữ các thông số, mẫu giọng và đánh giá phản h�
 
 ---
 
-## 🧬 Các vòng đào tạo & Tinh chỉnh (Training Iterations)
+## 🧬 Dữ liệu mẫu (Training Dataset)
 
-### Vòng 1: Khởi tạo Project & Baseline
-* **Trạng thái:** Sẵn sàng nạp mẫu giọng thật đầu tiên.
-* **Pipeline kỹ thuật:**
-  - Tiền xử lý âm thanh: Denoise, Trim silence, Bandpass 58Hz - 14kHz.
-  - Clone: VieNeu v3 Turbo / Fine-tuning profile.
-  - Hậu kỳ: Equalizer làm dày giọng nam (135Hz +2.4dB, 280Hz +1.2dB), Loudnorm -16 LUFS.
+### Mẫu 1: `voice-references/mentor-khanh-ref-01.wav`
+* **Nguồn gốc:** File ghi âm trực tiếp qua Telegram (`1JVVPMQLT_3NTNH2.aac`)
+* **Thời lượng:** ~36.15 giây
+* **Định dạng gốc:** AAC mono 44.1kHz -> Chuẩn hóa WAV 24kHz / Bandpass filter 60Hz-12kHz / Loudnorm -16 LUFS
+* **Đặc trưng âm học sơ bộ:**
+  - Giọng nam, tự nhiên, nhịp điệu đĩnh đạc, rõ ràng.
+  - Phù hợp làm mẫu tham chiếu gốc (Reference Voice Anchor) cho việc clone và tuning.
+
+---
+
+## 🛠️ Lộ trình huấn luyện (Training Pipeline)
+
+1. **Local CPU Engine (VieNeu-TTS):**
+   - Phù hợp chạy trực tiếp trên server với CPU Intel Xeon.
+   - Sử dụng `vieneu` v3 Turbo kết hợp mẫu `mentor-khanh-ref-01.wav`.
+2. **Cloud AI Voice Cloning (ElevenLabs / OpenRouter / Custom Engine):**
+   - Đăng ký Instant Voice Clone với mẫu chất lượng cao.
+3. **Bộ lọc hậu kỳ Mentor Podcast Filter:**
+   - EQ đặc trưng: Nâng dải trầm ấm (135Hz +2.2dB), làm rõ dải trung thoại (2.5kHz +1.0dB), Loudnorm -16 LUFS.
