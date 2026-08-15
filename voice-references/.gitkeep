@@ -1,0 +1,2 @@
+This folder contains reference WAV/MP3 voice samples used for VieNeu-TTS voice cloning.
+Place your training audio clips here (e.g. khanh-podcast-reference.wav).
