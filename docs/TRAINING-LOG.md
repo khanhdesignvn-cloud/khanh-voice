@@ -1,34 +1,36 @@
-# Mentor Khánh AI - Voice Training Log & Profiles
+# Mentor Khánh AI - Voice Training Log
 
-Tài liệu lưu trữ các thông số, mẫu giọng và đánh giá phản hồi để chất giọng **Mentor Khánh AI** thông minh và hoàn thiện dần theo thời gian.
-
----
-
-## 🎯 Định vị Persona: "Mentor Khánh AI"
-* **Phong cách:** Chuyên gia, chia sẻ kiến thức, trầm ấm, rõ ràng, truyền cảm hứng và tự tin.
-* **Mục tiêu ứng dụng:** Đọc voice cho Podcast, video thương hiệu, video chia sẻ chuyên môn, hướng dẫn kỹ thuật.
-* **Quyết định nền tảng (Baseline Selection):** Chọn **Bản Clone Mộc 01** làm gốc để phát triển chuỗi xử lý âm thanh chuẩn phòng thu cao cấp.
+## 🎯 Định vị Persona: "Khánh Podcast v.01"
+* **Tên chính thức:** Khánh Podcast v.01
+* **Phong cách:** Giọng mentor/podcast thương hiệu — trong trẻo, ấm mượt, chuyên nghiệp.
+* **Ứng dụng:** Đọc voice cho video podcast thương hiệu Nguyễn Quốc Khánh.
 
 ---
 
-## 🧬 Dữ liệu mẫu (Training Dataset)
+## ✅ QUYẾT ĐỊNH CHỐT (2026-08-16)
 
-### Mẫu 1: `voice-references/mentor-khanh-ref-01.wav`
-* **Nguồn gốc:** File ghi âm trực tiếp qua Telegram (`1JVVPMQLT_3NTNH2.aac`)
-* **Thời lượng:** ~36.15 giây
-* **Định dạng gốc:** AAC mono 44.1kHz -> Chuẩn hóa WAV 24kHz / Bandpass filter 60Hz-12kHz / Loudnorm -16 LUFS
+**Giọng chính thức:** **Khánh Podcast v.01** — kiểu **Neumann U87 Condenser**.
+
+| Hạng mục | Giá trị |
+| :--- | :--- |
+| Reference | `mentor-khanh-ref-02.wav` (75s) |
+| Engine | VieNeu v3 Turbo |
+| Mastering | Neumann U87 (presence 3.2kHz, air 12kHz, -16 LUFS) |
+| File chuẩn | `output/final/khanh-podcast-v01.mp3` |
+| File clone thô | `output/final/khanh-podcast-v01-raw.wav` |
+| Script tái tạo | `scripts/master_khanh_podcast.py` |
 
 ---
 
-## 🎙️ Các cấu hình Mastering Phòng Thu Đang Thử Nghiệm (Studio Master Profiles)
+## 🧬 Lịch sử huấn luyện
 
-1. **Studio Profile A — Dynamic Shure SM7B:**
-   - EQ: Boost ấm ngực 130Hz (+2.2dB), giảm đục 450Hz (-1.2dB), Presence 2.8kHz (+1.4dB), Air 10.5kHz (+1.8dB).
-   - Dynamic: Compressor nhẹ (Ratio 2.5:1, Attack 15ms, Release 120ms), Loudnorm -16 LUFS.
-2. **Studio Profile B — Condenser Neumann U87:**
-   - EQ: Sub-warmth 110Hz (+1.8dB), Presence 3.2kHz (+2.0dB), High Air 12kHz (+2.4dB).
-   - Dynamic: Compressor mềm mại (Ratio 2.2:1), độ nhạy hơi thở cao.
-3. **Studio Profile C — Tube Warmth (Đèn tiền khuếch đại):**
-   - EQ: Boost 140Hz (+2.8dB) + 250Hz (+1.2dB), cắt nhẹ 600Hz, tạo độ ấm dày sâu lắng.
-4. **Studio Profile D — Broadcast Executive:**
-   - EQ: 125Hz (+2.0dB), 2.4kHz (+2.2dB), 8kHz (+1.6dB), kiểm soát động lực dứt khoát.
+### Vòng 1 (baseline):
+- Mẫu ref-01 (36s) → 4 demo (01 raw, 02 warm, 03 rõ, 04 sâu lắng).
+- Chọn bản 01 (clone mộc) làm nền.
+
+### Vòng 2 (bản thu mới):
+- Mẫu ref-02 (75s, chuyên nghiệp hơn) → 4 biến thể phòng thu v2.
+- **CHỐT bản 02-v2-neumann-u87** (Neumann U87 condenser).
+
+### Vòng 3 (chính thức):
+- Đặt tên **Khánh Podcast v.01**, lưu file chuẩn + script mastering.
