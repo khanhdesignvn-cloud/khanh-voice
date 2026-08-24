@@ -24,10 +24,24 @@ Hệ thống xử lý âm thanh, sinh giọng đọc TTS chất lượng cao (Po
 
 ---
 
+## 🆓 Phần mềm tạo giọng nói miễn phí (Web App)
+
+Ứng dụng web đơn giản chạy cục bộ, dùng Microsoft Edge Neural TTS — **hoàn toàn miễn phí, không cần API key**. Gõ văn bản, chọn giọng, nghe thử và tải file MP3.
+
+```bash
+pip install -r requirements.txt
+uvicorn app.main:app --reload
+```
+
+Mở trình duyệt tại `http://localhost:8000`.
+
 ## 📁 Cấu trúc thư mục
 
 ```text
 khanh-voice/
+├── app/
+│   ├── main.py                      # Backend FastAPI cho web app TTS miễn phí (Edge TTS)
+│   └── static/index.html            # Giao diện web
 ├── scripts/
 │   ├── vieneu_infer.py              # Script sinh giọng VieNeu qua reference audio
 │   ├── generate_voice_demos.py       # Tạo so sánh 4 bản demo phong cách podcast
