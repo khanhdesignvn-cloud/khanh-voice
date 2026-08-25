@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Khanh Voice — Mua key tạo giọng nói AI</title>
+<link rel="stylesheet" href="/assets/style.css" />
+<style>
+  .hero { text-align: center; padding: 48px 24px 8px; }
+  .hero p { color: var(--muted); max-width: 560px; margin: 10px auto 0; }
+  .plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-top: 28px; }
+  .plan { text-align: center; }
+  .plan .price { font-size: 28px; font-weight: 700; margin: 10px 0; }
+  .plan .price small { font-size: 13px; color: var(--muted); font-weight: 400; }
+  .plan button { width: 100%; margin-top: 14px; }
+  .top-link { text-align: center; margin-top: 24px; }
+  .modal-backdrop {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,.6);
+    align-items: center; justify-content: center; padding: 16px;
+  }
+  .modal-backdrop.open { display: flex; }
+  .modal { max-width: 360px; width: 100%; }
+</style>
+</head>
+<body>
+  <div class="container">
+    <div class="hero">
+      <h1>🎙️ Khanh Voice</h1>
+      <p>Tạo giọng nói AI chất lượng cao cho podcast, video, học tập. Mua key dùng ngay, không cần cài đặt.</p>
+    </div>
+
+    <div id="plans" class="plans"></div>
+
+    <div class="top-link">
+      <a href="/app">Đã có key? Vào sử dụng ngay →</a>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="backdrop">
+    <div class="card modal">
+      <h3 id="modalTitle">Xác nhận mua gói</h3>
+      <label for="email">Email nhận key (không bắt buộc)</label>
+      <input id="email" type="email" placeholder="ban@vidu.com" />
+      <div class="error" id="checkoutError"></div>
+      <button id="confirmBuy" style="width:100%; margin-top:16px;">Thanh toán qua PayOS</button>
+      <button class="secondary" id="cancelBuy" style="width:100%; margin-top:8px;">Huỷ</button>
+    </div>
+  </div>
+
+<script>
+  let selectedPackage = null;
+
+  async function loadPlans() {
+    const res = await fetch("/api/packages");
+    const plans = await res.json();
+    const el = document.getElementById("plans");
+    el.innerHTML = plans.map((p) => `
+      <div class="card plan">
+        <div class="muted">${p.name}</div>
+        <div class="price">${p.price_vnd.toLocaleString("vi-VN")}đ <small>/ ${p.duration_days} ngày</small></div>
+        <button data-id="${p.id}" data-name="${p.name.replace(/"/g, '&quot;')}">Mua ngay</button>
+      </div>
+    `).join("");
+
+    el.querySelectorAll("button").forEach((btn) => {
+      btn.addEventListener("click", () => openModal(btn.dataset.id, btn.dataset.name));
+    });
+  }
+
+  function openModal(id, name) {
+    selectedPackage = id;
+    document.getElementById("modalTitle").textContent = `Xác nhận mua: ${name}`;
+    document.getElementById("checkoutError").style.display = "none";
+    document.getElementById("backdrop").classList.add("open");
+  }
+
+  document.getElementById("cancelBuy").addEventListener("click", () => {
+    document.getElementById("backdrop").classList.remove("open");
+  });
+
+  document.getElementById("confirmBuy").addEventListener("click", async () => {
+    const errorEl = document.getElementById("checkoutError");
+    const btn = document.getElementById("confirmBuy");
+    const email = document.getElementById("email").value.trim();
+    errorEl.style.display = "none";
+    btn.disabled = true;
+    btn.textContent = "Đang tạo link thanh toán...";
+
+    try {
+      const res = await fetch("/api/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ package_id: Number(selectedPackage), buyer_email: email || null }),
+      });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => ({}));
+        throw new Error(detail.detail || "Không tạo được đơn hàng");
+      }
+      const data = await res.json();
+      window.location.href = data.checkout_url;
+    } catch (err) {
+      errorEl.textContent = err.message;
+      errorEl.style.display = "block";
+      btn.disabled = false;
+      btn.textContent = "Thanh toán qua PayOS";
+    }
+  });
+
+  loadPlans();
+</script>
+</body>
+</html>

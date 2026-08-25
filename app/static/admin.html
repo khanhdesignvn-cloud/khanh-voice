@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Quản trị — Khanh Voice</title>
+<link rel="stylesheet" href="/assets/style.css" />
+<style>
+  .wrap { max-width: 960px; margin: 0 auto; }
+  .login { max-width: 360px; margin: 80px auto; text-align: center; }
+  .section { margin-top: 20px; }
+  .section .card { overflow-x: auto; }
+  .inline-form { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 14px; }
+  .inline-form > div { flex: 1; min-width: 140px; }
+  .inline-form label { margin: 0 0 6px; }
+  .price-edit { display: flex; gap: 6px; align-items: center; }
+  .price-edit input { width: 110px; }
+  .price-edit button { padding: 6px 10px; font-size: 12px; }
+  .table-actions button { padding: 5px 10px; font-size: 12px; margin-right: 4px; }
+  .status-box { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
+  .keycode { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+</style>
+</head>
+<body>
+  <div class="container">
+
+    <div id="login" class="login">
+      <div class="card">
+        <h2>Đăng nhập quản trị</h2>
+        <input id="password" type="password" placeholder="Mật khẩu admin" />
+        <div class="error" id="loginError"></div>
+        <button id="loginBtn" style="width:100%; margin-top:14px;">Đăng nhập</button>
+      </div>
+    </div>
+
+    <div id="dashboard" class="wrap" style="display:none;">
+      <div class="topbar" style="display:flex; justify-content:space-between; align-items:center;">
+        <h1 style="font-size:20px;">Bảng quản trị Khanh Voice</h1>
+        <button class="secondary" id="logoutBtn">Đăng xuất</button>
+      </div>
+
+      <div class="section card">
+        <h3>Trạng thái hệ thống</h3>
+        <div class="status-box">
+          <span id="payosStatus" class="badge">...</span>
+          <span class="muted" id="baseUrl"></span>
+          <button id="confirmWebhookBtn" class="secondary">Đăng ký Webhook với PayOS</button>
+        </div>
+        <p class="hint" id="webhookHint"></p>
+      </div>
+
+      <div class="section card">
+        <h3>Gói dịch vụ</h3>
+        <table>
+          <thead><tr><th>Tên gói</th><th>Thời hạn</th><th>Giá</th><th>Trạng thái</th><th></th></tr></thead>
+          <tbody id="packagesBody"></tbody>
+        </table>
+        <div class="inline-form" style="margin-top:16px;">
+          <div><label>Tên gói mới</label><input id="newPkgName" placeholder="Gói quý - 90 ngày" /></div>
+          <div><label>Số ngày</label><input id="newPkgDays" type="number" value="90" /></div>
+          <div><label>Giá (VNĐ)</label><input id="newPkgPrice" type="number" value="299000" /></div>
+          <div><button id="addPkgBtn">+ Thêm gói</button></div>
+        </div>
+      </div>
+
+      <div class="section card">
+        <h3>Cấp key thủ công</h3>
+        <div class="inline-form">
+          <div>
+            <label>Gói</label>
+            <select id="issuePackage"></select>
+          </div>
+          <div><label>Ghi chú (tuỳ chọn)</label><input id="issueNote" placeholder="VD: chuyển khoản Momo - Nguyễn A" /></div>
+          <div><button id="issueBtn">Tạo key</button></div>
+        </div>
+        <div id="issuedKeyBox" style="display:none;">
+          <p>Key vừa tạo: <span class="keycode" id="issuedKeyCode"></span></p>
+        </div>
+      </div>
+
+      <div class="section card">
+        <h3>Danh sách key</h3>
+        <div class="inline-form">
+          <div><input id="keySearch" placeholder="Tìm theo mã key..." /></div>
+          <div><button id="searchKeyBtn" class="secondary">Tìm</button></div>
+        </div>
+        <table>
+          <thead><tr><th>Key</th><th>Gói</th><th>Trạng thái</th><th>Hết hạn</th><th>Đơn hàng</th><th></th></tr></thead>
+          <tbody id="keysBody"></tbody>
+        </table>
+      </div>
+
+      <div class="section card">
+        <h3>Đơn hàng gần đây</h3>
+        <table>
+          <thead><tr><th>Mã đơn</th><th>Trạng thái</th><th>Số tiền</th><th>Email</th><th>Ngày tạo</th></tr></thead>
+          <tbody id="ordersBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+<script>
+  let packagesCache = [];
+
+  async function api(path, options = {}) {
+    const res = await fetch(path, { ...options, headers: { "Content-Type": "application/json", ...(options.headers || {}) } });
+    if (res.status === 401) {
+      showLogin();
+      throw new Error("Chưa đăng nhập");
+    }
+    if (!res.ok) {
+      const detail = await res.json().catch(() => ({}));
+      throw new Error(detail.detail || "Lỗi không xác định");
+    }
+    return res.status === 204 ? null : res.json();
+  }
+
+  function showLogin() {
+    document.getElementById("login").style.display = "block";
+    document.getElementById("dashboard").style.display = "none";
+  }
+
+  function showDashboard() {
+    document.getElementById("login").style.display = "none";
+    document.getElementById("dashboard").style.display = "block";
+    loadAll();
+  }
+
+  document.getElementById("loginBtn").addEventListener("click", async () => {
+    const password = document.getElementById("password").value;
+    const errorEl = document.getElementById("loginError");
+    errorEl.style.display = "none";
+    try {
+      await api("/api/admin/login", { method: "POST", body: JSON.stringify({ password }) });
+      showDashboard();
+    } catch (err) {
+      errorEl.textContent = err.message;
+      errorEl.style.display = "block";
+    }
+  });
+
+  document.getElementById("logoutBtn").addEventListener("click", async () => {
+    await api("/api/admin/logout", { method: "POST" });
+    showLogin();
+  });
+
+  async function loadAll() {
+    await Promise.all([loadStatus(), loadPackages(), loadKeys(), loadOrders()]);
+  }
+
+  async function loadStatus() {
+    const status = await api("/api/admin/status");
+    const el = document.getElementById("payosStatus");
+    el.textContent = status.payos_configured ? "PayOS: đã cấu hình" : "PayOS: CHƯA cấu hình";
+    el.className = "badge " + (status.payos_configured ? "active" : "expired");
+    document.getElementById("baseUrl").textContent = status.public_base_url;
+  }
+
+  document.getElementById("confirmWebhookBtn").addEventListener("click", async () => {
+    const hint = document.getElementById("webhookHint");
+    hint.textContent = "Đang đăng ký...";
+    try {
+      const res = await api("/api/admin/webhook/confirm", { method: "POST" });
+      hint.textContent = `Đã đăng ký webhook: ${res.webhook_url}`;
+    } catch (err) {
+      hint.textContent = "Lỗi: " + err.message;
+    }
+  });
+
+  async function loadPackages() {
+    packagesCache = await api("/api/admin/packages");
+    document.getElementById("packagesBody").innerHTML = packagesCache.map((p) => `
+      <tr>
+        <td>${p.name}</td>
+        <td>${p.duration_days} ngày</td>
+        <td>
+          <div class="price-edit">
+            <input type="number" value="${p.price_vnd}" data-price-id="${p.id}" />
+            <button class="secondary save-price" data-id="${p.id}">Lưu</button>
+          </div>
+        </td>
+        <td><span class="badge ${p.active ? 'active' : 'expired'}">${p.active ? 'Đang bán' : 'Đã ẩn'}</span></td>
+        <td class="table-actions">
+          <button class="secondary toggle-active" data-id="${p.id}" data-active="${p.active}">${p.active ? 'Ẩn' : 'Hiện'}</button>
+        </td>
+      </tr>
+    `).join("");
+
+    document.getElementById("issuePackage").innerHTML = packagesCache
+      .map((p) => `<option value="${p.id}">${p.name}</option>`)
+      .join("");
+
+    document.querySelectorAll(".save-price").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const id = btn.dataset.id;
+        const price = Number(document.querySelector(`input[data-price-id="${id}"]`).value);
+        await api(`/api/admin/packages/${id}/price`, { method: "PATCH", body: JSON.stringify({ price_vnd: price }) });
+        loadPackages();
+      });
+    });
+
+    document.querySelectorAll(".toggle-active").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const id = btn.dataset.id;
+        const next = btn.dataset.active !== "true";
+        await api(`/api/admin/packages/${id}/active?active=${next}`, { method: "PATCH" });
+        loadPackages();
+      });
+    });
+  }
+
+  document.getElementById("addPkgBtn").addEventListener("click", async () => {
+    const name = document.getElementById("newPkgName").value.trim();
+    const duration_days = Number(document.getElementById("newPkgDays").value);
+    const price_vnd = Number(document.getElementById("newPkgPrice").value);
+    if (!name || !duration_days || !price_vnd) return;
+    await api("/api/admin/packages", { method: "POST", body: JSON.stringify({ name, duration_days, price_vnd }) });
+    document.getElementById("newPkgName").value = "";
+    loadPackages();
+  });
+
+  document.getElementById("issueBtn").addEventListener("click", async () => {
+    const package_id = Number(document.getElementById("issuePackage").value);
+    const note = document.getElementById("issueNote").value.trim() || null;
+    const key = await api("/api/admin/keys/issue", { method: "POST", body: JSON.stringify({ package_id, note }) });
+    document.getElementById("issuedKeyCode").textContent = key.code;
+    document.getElementById("issuedKeyBox").style.display = "block";
+    loadKeys();
+  });
+
+  async function loadKeys(search) {
+    const query = search ? `?search=${encodeURIComponent(search)}` : "";
+    const keys = await api(`/api/admin/keys${query}`);
+    const packageName = (id) => (packagesCache.find((p) => p.id === id) || {}).name || `#${id}`;
+    document.getElementById("keysBody").innerHTML = keys.map((k) => `
+      <tr>
+        <td class="keycode">${k.code}</td>
+        <td>${packageName(k.package_id)}</td>
+        <td><span class="badge ${k.status}">${k.status}</span></td>
+        <td>${k.expires_at ? new Date(k.expires_at).toLocaleString("vi-VN") : "-"}</td>
+        <td>${k.order_code ?? "-"}</td>
+        <td class="table-actions">
+          ${k.status !== "revoked" ? `<button class="danger revoke-key" data-id="${k.id}">Thu hồi</button>` : ""}
+        </td>
+      </tr>
+    `).join("");
+
+    document.querySelectorAll(".revoke-key").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        await api(`/api/admin/keys/${btn.dataset.id}/revoke`, { method: "POST" });
+        loadKeys(document.getElementById("keySearch").value.trim());
+      });
+    });
+  }
+
+  document.getElementById("searchKeyBtn").addEventListener("click", () => {
+    loadKeys(document.getElementById("keySearch").value.trim());
+  });
+
+  async function loadOrders() {
+    const orders = await api("/api/admin/orders");
+    document.getElementById("ordersBody").innerHTML = orders.map((o) => `
+      <tr>
+        <td>${o.order_code}</td>
+        <td><span class="badge ${o.status}">${o.status}</span></td>
+        <td>${o.amount.toLocaleString("vi-VN")}đ</td>
+        <td>${o.buyer_email || "-"}</td>
+        <td>${new Date(o.created_at).toLocaleString("vi-VN")}</td>
+      </tr>
+    `).join("");
+  }
+
+  // Probe whether we're already logged in.
+  api("/api/admin/status").then(showDashboard).catch(() => showLogin());
+</script>
+</body>
+</html>

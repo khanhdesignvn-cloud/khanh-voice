@@ -24,24 +24,57 @@ Hệ thống xử lý âm thanh, sinh giọng đọc TTS chất lượng cao (Po
 
 ---
 
-## 🆓 Phần mềm tạo giọng nói miễn phí (Web App)
+## 💳 Website bán key TTS (Web App)
 
-Ứng dụng web đơn giản chạy cục bộ, dùng Microsoft Edge Neural TTS — **hoàn toàn miễn phí, không cần API key**. Gõ văn bản, chọn giọng, nghe thử và tải file MP3.
+Website hoàn chỉnh: trang bán hàng → thanh toán tự động qua **PayOS** → phát key tự động → công cụ tạo giọng nói (Microsoft Edge Neural TTS) khoá bằng key → trang quản trị.
+
+**Chạy thử cục bộ (không cần tài khoản PayOS thật để xem giao diện):**
 
 ```bash
 pip install -r requirements.txt
+cp .env.example .env   # rồi điền ADMIN_PASSWORD, SECRET_KEY tối thiểu
 uvicorn app.main:app --reload
 ```
 
-Mở trình duyệt tại `http://localhost:8000`.
+| Trang | Đường dẫn | Mô tả |
+|---|---|---|
+| Bán hàng | `/` | Khách chọn gói, thanh toán qua PayOS |
+| Công cụ TTS | `/app` | Nhập key để kích hoạt và tạo giọng nói |
+| Sau thanh toán | `/thanks` | Hiện key vừa mua |
+| Quản trị | `/admin` | Đăng nhập bằng `ADMIN_PASSWORD`: quản lý gói giá, cấp key thủ công, xem đơn hàng |
+
+**Thiết lập PayOS (bắt buộc để bán hàng tự động):**
+1. Tạo tài khoản merchant tại [payos.vn](https://payos.vn), lấy `Client ID`, `API Key`, `Checksum Key`.
+2. Điền 3 giá trị này cùng `PUBLIC_BASE_URL` (domain thật, có `https://`) vào `.env`.
+3. Sau khi deploy lên domain thật, vào `/admin` → bấm **"Đăng ký Webhook với PayOS"** một lần duy nhất để PayOS biết gửi thông báo thanh toán về đâu.
+
+**Mô hình key:** mỗi key có thời hạn (7/30/365 ngày...) tính từ **lần đầu kích hoạt** (nhập key tại `/app`), không tính từ lúc mua — khách không bị mất thời gian nếu chưa dùng ngay. Key = tài khoản, không cần đăng ký username/password riêng.
+
+⚠️ **Lưu ý:** `edge-tts` dùng ngược tính năng "Đọc to" miễn phí của Microsoft Edge, không phải API thương mại chính thức — không có SLA, có thể thay đổi/chặn bất kỳ lúc nào. Nếu kinh doanh lâu dài, nên chuyển gói trả phí sang giọng VieNeu (chạy local, xem mục bên dưới) và chỉ dùng Edge TTS cho gói dùng thử.
+
+**Triển khai lên VPS thật:** xem `deploy/` (Dockerfile, docker-compose, cấu hình Nginx + script `deploy.sh`). Chạy `deploy/deploy.sh` **trên VPS** (không phải từ máy khác) sau khi đã tạo `.env` với thông tin thật.
 
 ## 📁 Cấu trúc thư mục
 
 ```text
 khanh-voice/
 ├── app/
-│   ├── main.py                      # Backend FastAPI cho web app TTS miễn phí (Edge TTS)
-│   └── static/index.html            # Giao diện web
+│   ├── main.py                      # Khởi tạo FastAPI, gắn router, phục vụ trang HTML
+│   ├── config.py                    # Đọc cấu hình từ biến môi trường
+│   ├── db.py                        # SQLite: packages / orders / keys / sessions
+│   ├── security.py                  # Xác thực admin + phiên đăng nhập bằng key
+│   ├── payments.py                  # Tích hợp PayOS (SDK chính thức)
+│   ├── routes_public.py             # API bán hàng: /api/packages, /api/checkout, /api/order
+│   ├── routes_webhook.py            # /api/payos/webhook — xác thực chữ ký & phát key
+│   ├── routes_tts.py                # /api/redeem, /api/voices, /api/tts (yêu cầu key)
+│   ├── routes_admin.py              # /api/admin/* — quản lý gói/key/đơn hàng
+│   └── static/                      # landing.html, app.html, thanks.html, cancel.html, admin.html
+├── deploy/
+│   ├── Dockerfile
+│   ├── docker-compose.yml
+│   ├── nginx.conf.example
+│   └── deploy.sh                    # Script deploy chạy trên VPS
+├── data/                            # File SQLite khanhvoice.db (không commit)
 ├── scripts/
 │   ├── vieneu_infer.py              # Script sinh giọng VieNeu qua reference audio
 │   ├── generate_voice_demos.py       # Tạo so sánh 4 bản demo phong cách podcast

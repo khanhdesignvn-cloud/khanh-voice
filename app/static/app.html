@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Khanh Voice — Tạo giọng nói</title>
+<link rel="stylesheet" href="/assets/style.css" />
+<style>
+  .wrap { max-width: 640px; margin: 0 auto; }
+  .gate { max-width: 420px; margin: 60px auto; text-align: center; }
+  textarea { resize: vertical; min-height: 120px; }
+  .row { display: flex; gap: 16px; }
+  .row > div { flex: 1; }
+  .row-labels { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+  input[type="range"] { width: 100%; }
+  .result { margin-top: 18px; display: none; }
+  audio { width: 100%; margin-top: 10px; }
+  a.download { display: inline-block; margin-top: 10px; }
+  .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .topbar button { background: transparent; border: 1px solid var(--border); color: var(--muted); font-weight: 400; padding: 6px 12px; font-size: 12px; }
+</style>
+</head>
+<body>
+  <div class="container">
+
+    <div id="gate" class="gate">
+      <div class="card">
+        <h2>🔑 Nhập key để bắt đầu</h2>
+        <p class="muted">Nhập key bạn đã mua để kích hoạt và sử dụng công cụ tạo giọng nói.</p>
+        <input id="keyInput" placeholder="KHV-XXXX-XXXX-XXXX" autocomplete="off" />
+        <div class="error" id="gateError"></div>
+        <button id="redeemBtn" style="width:100%; margin-top:14px;">Kích hoạt</button>
+        <p class="hint">Chưa có key? <a href="/">Mua ngay tại đây</a></p>
+      </div>
+    </div>
+
+    <div id="workspace" class="wrap" style="display:none;">
+      <div class="topbar">
+        <h1 style="font-size:18px; margin:0;">🎙️ Khanh Voice</h1>
+        <button id="logoutBtn">Đổi key</button>
+      </div>
+      <div class="card">
+        <label for="text">Văn bản</label>
+        <textarea id="text" placeholder="Nhập nội dung cần đọc..." maxlength="5000"></textarea>
+
+        <label for="voice">Giọng đọc</label>
+        <select id="voice"></select>
+
+        <div class="row">
+          <div>
+            <div class="row-labels"><span>Tốc độ</span><span id="rateVal">0%</span></div>
+            <input type="range" id="rate" min="-50" max="50" value="0" />
+          </div>
+          <div>
+            <div class="row-labels"><span>Cao độ</span><span id="pitchVal">0Hz</span></div>
+            <input type="range" id="pitch" min="-50" max="50" value="0" />
+          </div>
+        </div>
+
+        <button id="generate" style="width:100%; margin-top:22px;">Tạo giọng nói</button>
+        <div class="error" id="genError"></div>
+
+        <div class="result" id="result">
+          <audio id="player" controls></audio>
+          <br />
+          <a class="download" id="download" download="giong-noi.mp3"><button class="secondary">⬇ Tải file MP3</button></a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  const gate = document.getElementById("gate");
+  const workspace = document.getElementById("workspace");
+  const gateError = document.getElementById("gateError");
+
+  function getToken() {
+    return localStorage.getItem("khv_session_token");
+  }
+
+  function setToken(token) {
+    localStorage.setItem("khv_session_token", token);
+  }
+
+  function clearToken() {
+    localStorage.removeItem("khv_session_token");
+  }
+
+  async function tryEnterWorkspace() {
+    const token = getToken();
+    if (!token) return showGate();
+
+    const res = await fetch("/api/voices", { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) {
+      clearToken();
+      return showGate();
+    }
+    const voices = await res.json();
+    populateVoices(voices);
+    gate.style.display = "none";
+    workspace.style.display = "block";
+  }
+
+  function showGate() {
+    gate.style.display = "block";
+    workspace.style.display = "none";
+  }
+
+  function populateVoices(voices) {
+    document.getElementById("voice").innerHTML = voices
+      .map((v) => `<option value="${v.id}">${v.label}</option>`)
+      .join("");
+  }
+
+  document.getElementById("redeemBtn").addEventListener("click", async () => {
+    const code = document.getElementById("keyInput").value.trim();
+    gateError.style.display = "none";
+    if (!code) {
+      gateError.textContent = "Vui lòng nhập key.";
+      gateError.style.display = "block";
+      return;
+    }
+
+    const btn = document.getElementById("redeemBtn");
+    btn.disabled = true;
+    btn.textContent = "Đang kích hoạt...";
+
+    try {
+      const res = await fetch("/api/redeem", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code }),
+      });
+      if (!res.ok) {
+        const detail = await res.json().catch(() => ({}));
+        throw new Error(detail.detail || "Key không hợp lệ");
+      }
+      const data = await res.json();
+      setToken(data.session_token);
+      await tryEnterWorkspace();
+    } catch (err) {
+      gateError.textContent = err.message;
+      gateError.style.display = "block";
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Kích hoạt";
+    }
+  });
+
+  document.getElementById("logoutBtn").addEventListener("click", () => {
+    clearToken();
+    showGate();
+  });
+
+  // --- TTS generation ---
+  const rateEl = document.getElementById("rate");
+  const pitchEl = document.getElementById("pitch");
+
+  rateEl.addEventListener("input", () => {
+    document.getElementById("rateVal").textContent = `${rateEl.value > 0 ? "+" : ""}${rateEl.value}%`;
+  });
+  pitchEl.addEventListener("input", () => {
+    document.getElementById("pitchVal").textContent = `${pitchEl.value > 0 ? "+" : ""}${pitchEl.value}Hz`;
+  });
+
+  document.getElementById("generate").addEventListener("click", async () => {
+    const text = document.getElementById("text").value.trim();
+    const errorEl = document.getElementById("genError");
+    const btn = document.getElementById("generate");
+    errorEl.style.display = "none";
+
+    if (!text) {
+      errorEl.textContent = "Vui lòng nhập văn bản.";
+      errorEl.style.display = "block";
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = "Đang tạo...";
+
+    try {
+      const res = await fetch("/api/tts", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getToken()}`,
+        },
+        body: JSON.stringify({
+          text,
+          voice: document.getElementById("voice").value,
+          rate: Number(rateEl.value),
+          pitch: Number(pitchEl.value),
+        }),
+      });
+
+      if (res.status === 401 || res.status === 403) {
+        clearToken();
+        showGate();
+        throw new Error("Phiên đã hết hạn, vui lòng nhập lại key.");
+      }
+      if (!res.ok) {
+        const detail = await res.json().catch(() => ({}));
+        throw new Error(detail.detail || "Không thể tạo giọng nói.");
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      document.getElementById("player").src = url;
+      document.getElementById("download").href = url;
+      document.getElementById("result").style.display = "block";
+      document.getElementById("player").play();
+    } catch (err) {
+      errorEl.textContent = err.message;
+      errorEl.style.display = "block";
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Tạo giọng nói";
+    }
+  });
+
+  tryEnterWorkspace();
+</script>
+</body>
+</html>

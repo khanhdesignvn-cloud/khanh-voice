@@ -1,72 +1,49 @@
 #!/usr/bin/env python3
-"""Free TTS web app backend, powered by Microsoft Edge Neural TTS (no API key required)."""
+"""Khanh Voice — TTS key-selling site: storefront + PayOS checkout + key-gated TTS + admin."""
 
-import io
 from pathlib import Path
 
-import edge_tts
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi import FastAPI
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+
+from . import db
+from .routes_admin import router as admin_router
+from .routes_public import router as public_router
+from .routes_tts import router as tts_router
+from .routes_webhook import router as webhook_router
 
 APP_DIR = Path(__file__).resolve().parent
 STATIC_DIR = APP_DIR / "static"
 
-app = FastAPI(title="Khanh Voice - Free TTS")
-
-VOICES = [
-    {"id": "vi-VN-HoaiMyNeural", "label": "Hoài My (Nữ, miền Bắc)"},
-    {"id": "vi-VN-NamMinhNeural", "label": "Nam Minh (Nam, miền Bắc)"},
-    {"id": "en-US-AriaNeural", "label": "Aria (English, US, Female)"},
-    {"id": "en-US-GuyNeural", "label": "Guy (English, US, Male)"},
-    {"id": "en-GB-SoniaNeural", "label": "Sonia (English, UK, Female)"},
-    {"id": "ja-JP-NanamiNeural", "label": "Nanami (Japanese, Female)"},
-    {"id": "ko-KR-SunHiNeural", "label": "SunHi (Korean, Female)"},
-    {"id": "zh-CN-XiaoxiaoNeural", "label": "Xiaoxiao (Chinese, Female)"},
-    {"id": "fr-FR-DeniseNeural", "label": "Denise (French, Female)"},
-]
-VOICE_IDS = {v["id"] for v in VOICES}
+app = FastAPI(title="Khanh Voice")
 
 
-class TTSRequest(BaseModel):
-    text: str = Field(..., min_length=1, max_length=5000)
-    voice: str = "vi-VN-HoaiMyNeural"
-    rate: int = Field(0, ge=-50, le=50)
-    pitch: int = Field(0, ge=-50, le=50)
+@app.on_event("startup")
+def on_startup() -> None:
+    db.init_db()
 
 
-@app.get("/api/voices")
-def list_voices():
-    return VOICES
+app.include_router(public_router)
+app.include_router(webhook_router)
+app.include_router(tts_router)
+app.include_router(admin_router)
 
+app.mount("/assets", StaticFiles(directory=STATIC_DIR), name="assets")
 
-@app.post("/api/tts")
-async def synthesize(req: TTSRequest):
-    if req.voice not in VOICE_IDS:
-        raise HTTPException(status_code=400, detail="Giọng không hợp lệ")
+PAGES = {
+    "/": "landing.html",
+    "/app": "app.html",
+    "/thanks": "thanks.html",
+    "/cancel": "cancel.html",
+    "/admin": "admin.html",
+}
 
-    communicate = edge_tts.Communicate(
-        req.text,
-        req.voice,
-        rate=f"{req.rate:+d}%",
-        pitch=f"{req.pitch:+d}Hz",
-    )
+for path, filename in PAGES.items():
+    def make_handler(fname: str):
+        async def handler():
+            return FileResponse(STATIC_DIR / fname)
 
-    audio_chunks = []
-    async for chunk in communicate.stream():
-        if chunk["type"] == "audio":
-            audio_chunks.append(chunk["data"])
+        return handler
 
-    if not audio_chunks:
-        raise HTTPException(status_code=502, detail="Không tạo được âm thanh, vui lòng thử lại")
-
-    audio_bytes = b"".join(audio_chunks)
-    return StreamingResponse(
-        io.BytesIO(audio_bytes),
-        media_type="audio/mpeg",
-        headers={"Content-Disposition": 'attachment; filename="giong-noi.mp3"'},
-    )
-
-
-app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
+    app.add_api_route(path, make_handler(filename), methods=["GET"], include_in_schema=False)

@@ -64,3 +64,8 @@ temp/
 *.wav
 *.mp3
 !voice-references/.gitkeep
+
+# Key-selling web app runtime data (SQLite DB with orders/keys)
+data/*.db
+data/*.db-journal
+!data/.gitkeep

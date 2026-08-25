@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Thanh toán thành công — Khanh Voice</title>
+<link rel="stylesheet" href="/assets/style.css" />
+<style>
+  .wrap { max-width: 480px; margin: 60px auto; text-align: center; }
+  .keybox {
+    margin-top: 20px; padding: 16px; border-radius: 12px;
+    background: #10131a; border: 1px dashed var(--accent);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 18px; letter-spacing: 1px; word-break: break-all;
+  }
+  .actions { display: flex; gap: 10px; margin-top: 16px; }
+  .actions button, .actions a { flex: 1; }
+  .actions a { display: block; text-align: center; }
+</style>
+</head>
+<body>
+  <div class="container wrap">
+    <div class="card">
+      <h2 id="title">Đang xác nhận thanh toán...</h2>
+      <p class="muted" id="subtitle">Vui lòng chờ trong giây lát, hệ thống đang xác nhận với PayOS.</p>
+      <div id="keyArea" style="display:none;">
+        <div class="keybox" id="keyCode"></div>
+        <div class="actions">
+          <button id="copyBtn">Sao chép key</button>
+          <a href="/app"><button class="secondary" style="width:100%;">Vào dùng ngay</button></a>
+        </div>
+        <p class="hint">Lưu lại key này — bạn sẽ cần nhập key tại trang /app để kích hoạt và sử dụng.</p>
+      </div>
+    </div>
+  </div>
+
+<script>
+  const params = new URLSearchParams(window.location.search);
+  const orderCode = params.get("order");
+  const token = params.get("t");
+
+  let attempts = 0;
+
+  async function poll() {
+    attempts += 1;
+    if (!orderCode || !token) {
+      document.getElementById("title").textContent = "Thiếu thông tin đơn hàng";
+      document.getElementById("subtitle").textContent = "Liên kết không hợp lệ.";
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/order/${orderCode}?t=${encodeURIComponent(token)}`);
+      if (!res.ok) throw new Error("not found");
+      const data = await res.json();
+
+      if (data.status === "PAID" && data.key_code) {
+        document.getElementById("title").textContent = "🎉 Thanh toán thành công!";
+        document.getElementById("subtitle").textContent = "Đây là key của bạn:";
+        document.getElementById("keyCode").textContent = data.key_code;
+        document.getElementById("keyArea").style.display = "block";
+        return;
+      }
+    } catch (err) {
+      // ignore, retry below
+    }
+
+    if (attempts < 30) {
+      setTimeout(poll, 2000);
+    } else {
+      document.getElementById("title").textContent = "Vẫn đang xử lý";
+      document.getElementById("subtitle").textContent =
+        "Thanh toán có thể mất thêm chút thời gian để xác nhận. Tải lại trang này sau ít phút.";
+    }
+  }
+
+  document.getElementById("copyBtn").addEventListener("click", () => {
+    const text = document.getElementById("keyCode").textContent;
+    navigator.clipboard.writeText(text).then(() => {
+      const btn = document.getElementById("copyBtn");
+      const old = btn.textContent;
+      btn.textContent = "Đã sao chép!";
+      setTimeout(() => (btn.textContent = old), 1500);
+    });
+  });
+
+  poll();
+</script>
+</body>
+</html>
